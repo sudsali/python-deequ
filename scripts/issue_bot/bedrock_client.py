@@ -12,7 +12,6 @@ _CIRCUIT_BREAKER_THRESHOLD = 3
 class BedrockClient:
     def __init__(self, cfg):
         self._model_id = cfg.bedrock_model_id
-        self._api_version = cfg.bedrock_api_version
         self._client = boto3.client(
             "bedrock-runtime",
             config=BotoConfig(
@@ -21,6 +20,7 @@ class BedrockClient:
                 retries={"max_attempts": 1, "mode": "standard"},
             ),
         )
+        self._guardrail_id = cfg.guardrail_id
         self._failures = 0
         self._circuit_open = False
 
@@ -28,25 +28,64 @@ class BedrockClient:
     def available(self):
         return not self._circuit_open
 
-    def invoke(self, prompt, max_tokens=1500, temperature=0.3):
+    def invoke(self, user_prompt, max_tokens=4096, temperature=0.3, json_schema=None, system_prompt=None):
+        """Invoke Bedrock using the Converse API with guardrails and optional structured output."""
         if self._circuit_open:
             logger.warning("Circuit breaker open, skipping Bedrock call")
             return None
         try:
-            resp = self._client.invoke_model(
-                modelId=self._model_id,
-                body=json.dumps({
-                    "anthropic_version": self._api_version,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                }),
-            )
-            result = json.loads(resp["body"].read())
-            if not result.get("content"):
+            if self._guardrail_id:
+                user_content = [{"guardContent": {"text": {"text": user_prompt}}}]
+            else:
+                user_content = [{"text": user_prompt}]
+
+            kwargs = {
+                "modelId": self._model_id,
+                "messages": [{"role": "user", "content": user_content}],
+                "inferenceConfig": {"maxTokens": max_tokens, "temperature": temperature},
+            }
+
+            if system_prompt:
+                kwargs["system"] = [
+                    {"text": system_prompt},
+                    {"cachePoint": {"type": "default"}},
+                ]
+
+            if json_schema:
+                kwargs["outputConfig"] = {
+                    "textFormat": {
+                        "type": "json_schema",
+                        "structure": {"jsonSchema": {
+                            "schema": json_schema,
+                            "name": "bot_response",
+                        }},
+                    }
+                }
+
+            if self._guardrail_id:
+                kwargs["guardrailConfig"] = {
+                    "guardrailIdentifier": self._guardrail_id,
+                    "guardrailVersion": "1",
+                    "trace": "enabled",
+                }
+
+            resp = self._client.converse(**kwargs)
+
+            # Check guardrail intervention
+            if resp.get("stopReason") == "guardrail_intervened":
+                logger.warning("Guardrail intervened: %s", resp.get("trace", ""))
+                return None
+
+            output = resp.get("output", {}).get("message", {}).get("content", [])
+            if not output:
                 raise ValueError("Empty Bedrock response")
+
             self._failures = 0
-            return result["content"][0]["text"].strip()
+            usage = resp.get("usage", {})
+            logger.info("Bedrock: input=%s, output=%s, cacheRead=%s, cacheWrite=%s",
+                        usage.get("inputTokens"), usage.get("outputTokens"),
+                        usage.get("cacheReadInputTokens"), usage.get("cacheWriteInputTokens"))
+            return output[0]["text"].strip()
         except Exception as e:
             self._failures += 1
             logger.error(f"Bedrock failed ({self._failures}/{_CIRCUIT_BREAKER_THRESHOLD}): {e}")

@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "properties": {
+    "comments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {"type": "string"},
+          "line": {"type": "integer"},
+          "comment": {"type": "string"}
+        },
+        "required": ["file", "line", "comment"]
+      }
+    }
+  },
+  "required": ["comments"]
+}
