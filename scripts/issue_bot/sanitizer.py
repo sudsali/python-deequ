@@ -33,6 +33,6 @@ def _fix_accidental_issue_refs(text):
         if line.strip().startswith("```"):
             in_code_block = not in_code_block
         if not in_code_block:
-            line = re.sub(r'#(\d+)(?!\w)', r'`#\1`', line)
+            line = re.sub(r'(?<!`)#(\d+)(?!\w)(?!`)', r'`#\1`', line)
         fixed.append(line)
     return "\n".join(fixed)

@@ -240,7 +240,10 @@ def act():
     is_pr = result.get("is_pr", False)
     title = result.get("title", "")
     html_url = result.get("html_url", "")
-    labels = [l for l in result.get("labels", []) if l in cfg.allowed_labels]
+    raw_labels = result.get("labels", [])
+    if not isinstance(raw_labels, list):
+        raw_labels = []
+    labels = [l for l in raw_labels if isinstance(l, str) and l in cfg.allowed_labels]
     response = result.get("response", "")
     prompt_id = result.get("prompt_id", "unknown")
     model_id = result.get("model_id", "unknown")
