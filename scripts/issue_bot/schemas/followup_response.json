@@ -3,11 +3,18 @@
   "properties": {
     "action": {
       "type": "string",
-      "enum": ["RESPOND", "ESCALATE"]
+      "enum": [
+        "RESPOND",
+        "ESCALATE"
+      ]
     },
     "response": {
       "type": "string"
     }
   },
-  "required": ["action", "response"]
+  "required": [
+    "action",
+    "response"
+  ],
+  "additionalProperties": false
 }

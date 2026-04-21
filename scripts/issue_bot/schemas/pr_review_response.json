@@ -6,13 +6,27 @@
       "items": {
         "type": "object",
         "properties": {
-          "file": {"type": "string"},
-          "line": {"type": "integer"},
-          "comment": {"type": "string"}
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer"
+          },
+          "comment": {
+            "type": "string"
+          }
         },
-        "required": ["file", "line", "comment"]
+        "required": [
+          "file",
+          "line",
+          "comment"
+        ],
+        "additionalProperties": false
       }
     }
   },
-  "required": ["comments"]
+  "required": [
+    "comments"
+  ],
+  "additionalProperties": false
 }

@@ -51,7 +51,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install requests==2.32.3 boto3==1.38.0
+        run: pip install requests boto3
 
       - name: Run analysis
         env:
@@ -100,7 +100,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install requests==2.32.3 boto3==1.38.0
+        run: pip install requests boto3
 
       - name: Download artifact
         uses: actions/download-artifact@v4
