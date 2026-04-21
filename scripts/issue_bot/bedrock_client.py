@@ -28,16 +28,17 @@ class BedrockClient:
     def available(self):
         return not self._circuit_open
 
-    def invoke(self, user_prompt, max_tokens=4096, temperature=0.3, json_schema=None, system_prompt=None):
-        """Invoke Bedrock using the Converse API with guardrails and optional structured output."""
+    def invoke(self, prompt, max_tokens=4096, temperature=0.3, json_schema=None):
+        """Invoke Bedrock using the Converse API.
+
+        Splits the prompt at <knowledge_base> to separate trusted instructions
+        (system prompt, cached) from untrusted user content (guarded).
+        """
         if self._circuit_open:
             logger.warning("Circuit breaker open, skipping Bedrock call")
             return None
         try:
-            if self._guardrail_id:
-                user_content = [{"guardContent": {"text": {"text": user_prompt}}}]
-            else:
-                user_content = [{"text": user_prompt}]
+            system_prompt, user_content = self._split_prompt(prompt)
 
             kwargs = {
                 "modelId": self._model_id,
@@ -71,7 +72,6 @@ class BedrockClient:
 
             resp = self._client.converse(**kwargs)
 
-            # Check guardrail intervention
             if resp.get("stopReason") == "guardrail_intervened":
                 logger.warning("Guardrail intervened: %s", resp.get("trace", ""))
                 return None
@@ -93,3 +93,25 @@ class BedrockClient:
                 self._circuit_open = True
                 logger.error("Circuit breaker OPEN")
             return None
+
+    def _split_prompt(self, prompt):
+        """Split rendered prompt into trusted system prompt and untrusted user content.
+
+        Everything before <knowledge_base> is trusted instructions (system prompt).
+        Everything from <knowledge_base> onward contains user data (guarded).
+        """
+        marker = "<knowledge_base>"
+        idx = prompt.find(marker)
+        if idx == -1:
+            # No marker — send everything as user content (unguarded)
+            return None, [{"text": prompt}]
+
+        system = prompt[:idx].strip()
+        user_data = prompt[idx:].strip()
+
+        if self._guardrail_id:
+            user_content = [{"guardContent": {"text": {"text": user_data}}}]
+        else:
+            user_content = [{"text": user_data}]
+
+        return system, user_content
